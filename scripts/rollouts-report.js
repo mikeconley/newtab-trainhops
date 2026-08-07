@@ -30,8 +30,8 @@ class RolloutsReport extends LitElement {
           const PERCENTAGE =
             (rollout.bucketConfig.count / rollout.bucketConfig.total) * 100;
           return html`<li>
-            <a href="${NIMBUS_URL}" target="_blank" rel="noopener"
-              >${rollout.slug} - ${rollout.userFacingName}</a
+            <a href="${NIMBUS_URL}" target="_blank" rel="noopener" title="${rollout.slug} - ${rollout.userFacingName}"
+              >${rollout.userFacingName}</a
             >
             at <strong>${PERCENTAGE}%</strong>
           </li>`;

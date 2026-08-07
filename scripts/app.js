@@ -3,10 +3,16 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { LitElement, html } from "../vendor/lit3/lit-all.min.js";
-import { resolveRevision, getRevisionData, shorten } from "./api.mjs";
-import "./jobs-report.mjs";
-import "./locales-results.mjs";
-import "./rollouts-report.mjs";
+import {
+  resolveRevision,
+  getRevisionData,
+  getMergeDates,
+  buildLocalesReport,
+  shorten,
+} from "./api.js";
+import "./jobs-report.js";
+import "./locales-results.js";
+import "./rollouts-report.js";
 
 const SHA_TYPE_HG = "hg";
 const SHA_TYPE_GIT = "git";
@@ -17,6 +23,8 @@ class TrainCheckApp extends LitElement {
     loading: { type: Boolean },
     results: { type: Object },
     shaType: { type: String },
+    refreshingLocales: { type: Boolean },
+    localesProgress: { type: String },
   };
 
   constructor() {
@@ -25,6 +33,8 @@ class TrainCheckApp extends LitElement {
     this.loading = false;
     this.results = null;
     this.shaType = SHA_TYPE_HG;
+    this.refreshingLocales = false;
+    this.localesProgress = "";
   }
 
   connectedCallback() {
@@ -136,11 +146,12 @@ class TrainCheckApp extends LitElement {
                 .rollouts=${revisionData.rolloutData}
               ></rollouts-report>
               <locales-results
-                .betaStartDate=${revisionData.betaStartDate}
-                .releaseStartDate=${revisionData.releaseStartDate}
                 .localesReport=${revisionData.localesReport}
-                .ftlComparison=${revisionData.ftlComparison}
+                .newtabFtlLastModified=${revisionData.newtabFtlLastModified}
                 .sha=${revisionData.gitSha}
+                .refreshing=${this.refreshingLocales}
+                .refreshProgress=${this.localesProgress}
+                @refresh-locales=${this.#refreshLocales}
               ></locales-results>
             `}
       </div>
@@ -203,6 +214,48 @@ class TrainCheckApp extends LitElement {
   }
 
   /**
+   * Rebuilds just the locales report against the current firefox-l10n HEAD,
+   * leaving the CI and rollout sections alone.
+   */
+  async #refreshLocales() {
+    const { revisionData } = this.results ?? {};
+    if (!revisionData || this.refreshingLocales) {
+      return;
+    }
+
+    this.refreshingLocales = true;
+    this.localesProgress = "Refreshing...";
+    this.requestUpdate();
+
+    try {
+      const localesReport = await buildLocalesReport({
+        gitSha: revisionData.gitSha,
+        betaStartDate: revisionData.betaStartDate,
+        releaseStartDate: revisionData.releaseStartDate,
+        onProgress: message => {
+          this.localesProgress = message;
+          this.requestUpdate();
+        },
+      });
+
+      // Replace results wholesale so Lit sees a new object and re-renders.
+      this.results = {
+        ...this.results,
+        revisionData: { ...revisionData, localesReport },
+      };
+    } catch (error) {
+      this.localesProgress = `Refresh failed: ${error.message}`;
+      this.refreshingLocales = false;
+      this.requestUpdate();
+      return;
+    }
+
+    this.refreshingLocales = false;
+    this.localesProgress = "";
+    this.requestUpdate();
+  }
+
+  /**
    * Initiates the train-hop status check for the provided or latest SHA.
    */
   async #checkTrainStatus() {
@@ -221,24 +274,33 @@ class TrainCheckApp extends LitElement {
         this.sha = this.shaType == SHA_TYPE_GIT ? gitSha : hgSha;
       }
 
-      this.#setProgress("Fetching CI, locales and rollout data...");
-      const revisionData = await getRevisionData(gitSha, hgSha);
+      // The locales report needs both merge dates up front, so resolve them
+      // (prompting if the schedule API is unreachable) before doing the work.
+      this.#setProgress("Fetching merge dates...");
+      let { betaStartDate, releaseStartDate } = await getMergeDates();
 
-      if (revisionData.betaStartDate === null) {
-        revisionData.betaStartDate = this.#promptForDate("Beta start date");
-        if (revisionData.betaStartDate === null) {
+      if (betaStartDate === null) {
+        betaStartDate = this.#promptForDate("Beta start date");
+        if (betaStartDate === null) {
           throw new Error("Beta start date required for locales analysis");
         }
       }
 
-      if (revisionData.releaseStartDate === null) {
-        revisionData.releaseStartDate = this.#promptForDate(
+      if (releaseStartDate === null) {
+        releaseStartDate = this.#promptForDate(
           "Release start date (when current release version first merged to Beta)"
         );
-        if (revisionData.releaseStartDate === null) {
+        if (releaseStartDate === null) {
           throw new Error("Release start date required for locales analysis");
         }
       }
+
+      this.#setProgress("Fetching CI, locales and rollout data...");
+      const revisionData = await getRevisionData(gitSha, hgSha, {
+        betaStartDate,
+        releaseStartDate,
+        onProgress: message => this.#setProgress(message),
+      });
 
       this.results = { gitSha, hgSha, revisionData };
       this.#updateLocationBar(gitSha, hgSha);

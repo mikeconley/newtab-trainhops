@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { LitElement, html } from "../vendor/lit3/lit-all.min.js";
-import { BETA_JOB_GROUP_SYMBOL, RELEASE_JOB_GROUP_SYMBOL } from "./api.mjs";
+import { BETA_JOB_GROUP_SYMBOL, RELEASE_JOB_GROUP_SYMBOL } from "./api.js";
 
 const TREEHERDER_URL =
   "https://treeherder.mozilla.org/jobs?repo=mozilla-central&searchStr=trainhop&revision=";

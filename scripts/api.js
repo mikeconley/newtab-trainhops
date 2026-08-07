@@ -2,6 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { buildLocalesReport } from "./locales.js";
+
+export { buildLocalesReport };
+
 const FIREFOX_REPO_API = "https://api.github.com/repos/mozilla-firefox/firefox";
 
 // hg.mozilla.org sits behind a Fastly bot challenge that serves an HTML
@@ -20,6 +24,8 @@ const EXPERIMENTER_API =
 
 export const RELEASE_JOB_GROUP_SYMBOL = "M-trainhop-rel";
 export const BETA_JOB_GROUP_SYMBOL = "M-trainhop-beta";
+
+const EN_US_NEWTAB_FTL = "browser/locales/en-US/browser/newtab/newtab.ftl";
 
 const SHA_RE = /^[0-9a-f]{7,40}$/i;
 
@@ -330,9 +336,13 @@ function transformJobsData(jobPropertyNames, jobsData) {
 
 /**
  * Fetches the Beta and Release merge dates from whattrainisitnow.com.
+ *
+ * These gate the locales report, so they are fetched before the rest of the
+ * revision data in order to give the caller a chance to supply them by hand.
+ *
  * @returns {Promise<{betaStartDate: string|null, releaseStartDate: string|null}>}
  */
-async function getBetaAndReleaseDates() {
+export async function getMergeDates() {
   try {
     const [betaResponse, releaseResponse] = await Promise.all([
       fetch(`${TRAIN_SCHEDULE_API}/?version=beta`, { credentials: "omit" }),
@@ -366,87 +376,49 @@ async function getBetaAndReleaseDates() {
 }
 
 /**
- * Gets all revision data in parallel for train-hop assessment.
+ * Gets all revision data for train-hop assessment.
+ *
+ * The locales report is recomputed from firefox-l10n rather than read from the
+ * checked-in locales-report.json, because non-en-US strings are now pulled from
+ * that repository at build time and can change between builds of the same
+ * Firefox revision.
+ *
  * @param {string} gitSha - The Git commit SHA
  * @param {string} hgSha - The matching Mercurial commit SHA
- * @returns {Promise<Object>} All revision data including files and push info
+ * @param {Object} options
+ * @param {string} options.betaStartDate - Beta merge date (YYYY-MM-DD)
+ * @param {string} options.releaseStartDate - Release merge-to-beta date
+ * @param {function(string): void} [options.onProgress] - Progress callback
+ * @returns {Promise<Object>} All revision data
  */
-export async function getRevisionData(gitSha, hgSha) {
-  const [
-    pushData,
-    newtabFtlInfo,
-    webextGlueFtlInfo,
-    localesReport,
-    mergeDates,
-    rolloutData,
-  ] = await Promise.all([
-    getPushData(hgSha),
-    getGitHubFileInfo(gitSha, "browser/locales/en-US/browser/newtab/newtab.ftl"),
-    getGitHubFileInfo(
-      gitSha,
-      "browser/extensions/newtab/webext-glue/locales/en-US/browser/newtab/newtab.ftl"
-    ),
-    getGitHubFile(
-      gitSha,
-      "browser/extensions/newtab/webext-glue/locales/locales-report.json"
-    ),
-    getBetaAndReleaseDates(),
-    getRolloutData(),
-  ]);
+export async function getRevisionData(
+  gitSha,
+  hgSha,
+  { betaStartDate, releaseStartDate, onProgress }
+) {
+  const [pushData, newtabFtlInfo, rolloutData, localesReport] =
+    await Promise.all([
+      getPushData(hgSha),
+      getGitHubFileInfo(gitSha, EN_US_NEWTAB_FTL),
+      getRolloutData(),
+      buildLocalesReport({
+        gitSha,
+        betaStartDate,
+        releaseStartDate,
+        onProgress,
+      }),
+    ]);
 
   return {
     gitSha,
     hgSha,
     pushData,
-    ftlComparison: compareNewtabFtlFileInfos(newtabFtlInfo, webextGlueFtlInfo),
-    localesReport: JSON.parse(localesReport.decodedContent),
-    betaStartDate: mergeDates.betaStartDate,
-    releaseStartDate: mergeDates.releaseStartDate,
+    newtabFtlLastModified: newtabFtlInfo.lastModifiedDate,
+    localesReport,
+    betaStartDate,
+    releaseStartDate,
     rolloutData,
   };
-}
-
-/**
- * Fetches a file from the Firefox GitHub repository at a specific commit.
- * @param {string} gitSha - The Git commit SHA
- * @param {string} filePath - The path to the file in the repository
- * @returns {Promise<Object>} The file data from GitHub, with decodedContent
- */
-async function getGitHubFile(gitSha, filePath) {
-  const response = await fetch(
-    `${FIREFOX_REPO_API}/contents/${filePath}?ref=${gitSha}`,
-    { credentials: "omit" }
-  );
-  if (!response.ok) {
-    if (response.status === 404) {
-      throw new Error(`File not found: ${filePath} at ${shorten(gitSha)}`);
-    }
-    throw new Error(`Failed to fetch file ${filePath}: ${response.status}`);
-  }
-
-  const fileData = await response.json();
-
-  if (fileData.type === "file") {
-    if (fileData.content && fileData.encoding == "base64") {
-      fileData.decodedContent = decodeBase64UTF8(fileData.content);
-    } else if (fileData.encoding == "none") {
-      fileData.decodedContent = await (await fetch(fileData.download_url)).text();
-    }
-  }
-
-  return fileData;
-}
-
-/**
- * atob() yields one byte per character, which mangles any non-ASCII content in
- * the locales report. Re-decode those bytes as UTF-8.
- * @param {string} base64 - Base64 content, possibly with embedded newlines
- * @returns {string} The decoded text
- */
-function decodeBase64UTF8(base64) {
-  const binary = atob(base64.replace(/\n/g, ""));
-  const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
 }
 
 /**
@@ -468,33 +440,6 @@ async function getGitHubFileInfo(gitSha, filePath) {
   }
 
   return { path: filePath, lastModifiedDate: commitInfo.commit.author.date };
-}
-
-/**
- * Compares the last modified dates of the main and webext-glue newtab.ftl files.
- * @param {Object} newtabFtlInfo - Main newtab.ftl file info
- * @param {Object} webextGlueFtlInfo - Webext-glue newtab.ftl file info
- * @returns {Object} Comparison result with dates and sync status
- */
-function compareNewtabFtlFileInfos(newtabFtlInfo, webextGlueFtlInfo) {
-  const mainLastModified = new Date(newtabFtlInfo.lastModifiedDate);
-  const webextLastModified = new Date(webextGlueFtlInfo.lastModifiedDate);
-
-  const timeDiff = mainLastModified.getTime() - webextLastModified.getTime();
-  const daysDiff = Math.round(timeDiff / (1000 * 60 * 60 * 24));
-
-  let status = "in-sync";
-  let message = "Files are in sync";
-
-  if (timeDiff > 0) {
-    status = "main-newer";
-    message = `Main newtab.ftl is ${Math.abs(daysDiff)} day(s) newer than webext-glue version`;
-  } else if (timeDiff < 0) {
-    status = "webext-newer";
-    message = `Webext-glue newtab.ftl is ${Math.abs(daysDiff)} day(s) newer than main version`;
-  }
-
-  return { status, message, daysDiff };
 }
 
 /**
