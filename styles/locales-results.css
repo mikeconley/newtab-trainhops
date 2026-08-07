@@ -1,0 +1,66 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+:host {
+  display: block;
+  color: var(--text-color);
+}
+
+h1 {
+  font-size: 1.3em;
+}
+
+h2 {
+  font-size: 1.05em;
+}
+
+h2.blocked {
+  color: var(--error-color);
+}
+
+a {
+  color: var(--link-color);
+}
+
+a:visited {
+  color: var(--link-color-visited);
+}
+
+a:hover {
+  color: var(--link-color-hover);
+}
+
+ol {
+  list-style: none;
+  font-family: monospace;
+  max-height: 500px;
+  width: fit-content;
+  overflow-y: auto;
+  padding-inline-start: 20px;
+}
+
+ul.locale-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  list-style: none;
+  padding: 0;
+  font-family: monospace;
+}
+
+pre {
+  display: inline-block;
+  margin: 0;
+  padding: 2px 6px;
+  background: var(--code-background-color);
+  border-radius: 3px;
+}
+
+details {
+  margin-bottom: 6px;
+}
+
+summary {
+  cursor: pointer;
+}

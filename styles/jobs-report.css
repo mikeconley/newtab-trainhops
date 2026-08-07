@@ -1,0 +1,66 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+:host {
+  display: block;
+  color: var(--text-color);
+}
+
+h1 {
+  font-size: 1.3em;
+}
+
+a {
+  color: var(--link-color);
+}
+
+a:visited {
+  color: var(--link-color-visited);
+}
+
+a:hover {
+  color: var(--link-color-hover);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  text-align: start;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--status-unknown-color);
+}
+
+.status-passing .dot {
+  background: var(--status-passing-color);
+}
+
+.status-failing .dot {
+  background: var(--status-failing-color);
+}
+
+.status-unknown .dot {
+  background: var(--status-unknown-color);
+}
+
+.empty {
+  font-style: italic;
+  color: var(--text-color-deemphasized);
+}

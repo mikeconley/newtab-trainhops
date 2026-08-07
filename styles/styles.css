@@ -1,0 +1,39 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* Custom properties inherit through shadow roots, so these are the single
+ * source of truth for colour across every component. */
+:root {
+  color-scheme: light dark;
+
+  --background-color: light-dark(#ffffff, #1c1b22);
+  --text-color: light-dark(#15141a, #fbfbfe);
+  --text-color-deemphasized: light-dark(#5b5b66, #cfcfd8);
+  --border-color: light-dark(#cfcfd8, #52525e);
+
+  --link-color: light-dark(#0060df, #00ddff);
+  --link-color-hover: light-dark(#0250bb, #80ebff);
+  --link-color-visited: light-dark(#321c64, #ccb3ff);
+
+  --surface-color: light-dark(#f9f9fb, #2b2a33);
+  --code-background-color: light-dark(#ededf0, #42414d);
+
+  --error-color: light-dark(#c50042, #ff9aa2);
+  --status-passing-color: light-dark(#00874d, #2ac3a2);
+  --status-failing-color: light-dark(#c50042, #ff4f5e);
+  --status-unknown-color: light-dark(#8f6c00, #ffbd4f);
+
+  --button-background-color: #0060df;
+  --button-background-color-hover: #003eaa;
+  --button-background-color-disabled: light-dark(#cfcfd8, #52525e);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+}

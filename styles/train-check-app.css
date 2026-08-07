@@ -1,0 +1,133 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* Train Check App Component Styles */
+:host {
+  display: block;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: var(--text-color);
+}
+
+h1 {
+  text-align: center;
+}
+
+a {
+  color: var(--link-color);
+}
+
+a:visited {
+  color: var(--link-color-visited);
+}
+
+a:hover {
+  color: var(--link-color-hover);
+}
+
+.input-section {
+  margin: 20px auto;
+  max-width: 800px;
+}
+
+label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-family: monospace;
+  box-sizing: border-box;
+  background: Field;
+  color: FieldText;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-top: 10px;
+}
+
+button {
+  background: var(--button-background-color);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+}
+
+button:hover {
+  background: var(--button-background-color-hover);
+}
+
+button:disabled {
+  background: var(--button-background-color-disabled);
+  cursor: not-allowed;
+}
+
+.progress {
+  font-style: italic;
+  color: var(--text-color-deemphasized);
+}
+
+.error {
+  color: var(--error-color);
+  font-weight: bold;
+}
+
+.results {
+  margin: 30px auto 0;
+  max-width: 800px;
+  padding: 20px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.revision {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 15px;
+  margin: 0 0 20px;
+  font-family: monospace;
+}
+
+.revision dt {
+  font-weight: bold;
+}
+
+.revision dd {
+  margin: 0;
+}
+
+#sha-type-holder {
+  border: 0;
+  padding: 0;
+  margin-block: 5px;
+  font-size: 0.8em;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+#sha-type-holder label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-weight: normal;
+}
+
+#sha-type-holder input[type="radio"] {
+  margin: 0;
+}
