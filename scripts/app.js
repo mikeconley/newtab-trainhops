@@ -53,7 +53,7 @@ class TrainCheckApp extends LitElement {
   render() {
     return html`
       <link rel="stylesheet" href="./styles/train-check-app.css" />
-      <h1>New Tab Train-hop Station</h1>
+      <h1>New Tab Train-hops</h1>
 
       <div class="input-section">
         <label for="sha-input">Revision SHA (leave empty for latest):</label>
