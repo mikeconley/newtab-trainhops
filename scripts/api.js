@@ -15,7 +15,7 @@ const FIREFOX_REPO_API = "https://api.github.com/repos/mozilla-firefox/firefox";
 // with Access-Control-Allow-Origin. Accept is a CORS-safelisted header, so
 // this still avoids a preflight. Going through hg.mozilla.org does not work:
 // it challenges the redirect itself.
-const HGMO_API = "https://hg-edge.mozilla.org/mozilla-central";
+const HGMO_ORIGIN = "https://hg-edge.mozilla.org";
 const HGMO_HEADERS = { Accept: "application/json" };
 const TREEHERDER_API = "https://treeherder.mozilla.org/api";
 const TRAIN_SCHEDULE_API = "https://whattrainisitnow.com/api/release/schedule";
@@ -35,6 +35,45 @@ const DEFAULT_BRANCH = "default";
 
 // How far back to reach per request when skipping over runs of tagging pushes.
 const PUSH_PAGE_SIZE = 20;
+
+/**
+ * The repositories a revision may live in, in the order they are searched.
+ * A revision that has not yet merged to mozilla-central can still be assessed
+ * from autoland, which GitHub mirrors as its own branch of the same repo, so
+ * git SHAs resolve there without any extra work.
+ */
+export const REPOS = [
+  {
+    name: "mozilla-central",
+    hgPath: "mozilla-central",
+    treeherder: "mozilla-central",
+  },
+  {
+    name: "autoland",
+    hgPath: "integration/autoland",
+    treeherder: "autoland",
+  },
+];
+
+const DEFAULT_REPO = REPOS[0].name;
+
+/**
+ * @param {string} name - A repository name from REPOS
+ * @returns {Object} The matching repository descriptor
+ */
+export function getRepo(name) {
+  return REPOS.find(repo => repo.name === name) ?? REPOS[0];
+}
+
+/**
+ * Builds a link to a changeset on hg.mozilla.org for the right repository.
+ * @param {string} hgSha - The Mercurial commit SHA
+ * @param {string} repoName - A repository name from REPOS
+ * @returns {string} The hgweb URL
+ */
+export function hgRevisionUrl(hgSha, repoName) {
+  return `https://hg.mozilla.org/${getRepo(repoName).hgPath}/rev/${hgSha}`;
+}
 
 /**
  * The git <-> hg mapping for a landed changeset never changes, so it is safe
@@ -66,8 +105,13 @@ async function fetchJSON(url, description, headers) {
   return response.json();
 }
 
-function fetchHgJSON(path, description) {
-  return fetchJSON(`${HGMO_API}/${path}`, description, HGMO_HEADERS);
+function fetchHgJSON(path, description, repoName = DEFAULT_REPO) {
+  const { hgPath } = getRepo(repoName);
+  return fetchJSON(
+    `${HGMO_ORIGIN}/${hgPath}/${path}`,
+    description,
+    HGMO_HEADERS
+  );
 }
 
 /**
@@ -75,52 +119,78 @@ function fetchHgJSON(path, description) {
  * git_commit field, which is how we map Mercurial SHAs back to git without
  * needing Lando (which does not send CORS headers).
  * @param {string} hgSha - The Mercurial commit SHA
- * @returns {Promise<Object>} The changeset JSON from hgweb
+ * @param {string} repoName - A repository name from REPOS
+ * @returns {Promise<Object|null>} The changeset JSON, or null if not in this repo
  */
-async function getHgRevision(hgSha) {
-  const response = await fetch(`${HGMO_API}/json-rev/${hgSha}`, {
+async function getHgRevision(hgSha, repoName) {
+  const { hgPath } = getRepo(repoName);
+  const response = await fetch(`${HGMO_ORIGIN}/${hgPath}/json-rev/${hgSha}`, {
     credentials: "omit",
     headers: HGMO_HEADERS,
   });
+  if (response.status === 404) {
+    return null;
+  }
   if (!response.ok) {
-    if (response.status === 404) {
-      throw new Error(`Revision ${hgSha} not found on hg.mozilla.org`);
-    }
     throw new Error(`Failed to look up ${hgSha}: ${response.status}`);
   }
   return response.json();
 }
 
 /**
- * Converts a Mercurial SHA to its corresponding Git SHA.
+ * Converts a Mercurial SHA to its corresponding Git SHA, searching
+ * mozilla-central first and falling back to autoland.
  * @param {string} hgSha - The Mercurial commit SHA
- * @returns {Promise<string>} The corresponding Git SHA
+ * @returns {Promise<{gitSha: string, repo: string}>} The Git SHA and its repo
  */
 export async function getGitSha(hgSha) {
   const cached = shaCache.get(`hg2git:${hgSha}`);
   if (cached) {
-    return cached;
+    return {
+      gitSha: cached,
+      repo: shaCache.get(`hgrepo:${hgSha}`) ?? DEFAULT_REPO,
+    };
   }
 
-  const revision = await getHgRevision(hgSha);
-  if (!revision.git_commit) {
-    throw new Error(`No git commit recorded for Mercurial SHA ${hgSha}`);
+  let taggingBranch = null;
+
+  for (const { name } of REPOS) {
+    const revision = await getHgRevision(hgSha, name);
+    if (!revision) {
+      continue;
+    }
+
+    // Tagging changesets exist only in Mercurial. hgweb still reports a
+    // git_commit, but it is not present on GitHub, so remember this and fail
+    // with something more useful than the 404 a later request would produce.
+    if (revision.branch && revision.branch !== DEFAULT_BRANCH) {
+      taggingBranch = revision.branch;
+      continue;
+    }
+
+    if (!revision.git_commit) {
+      throw new Error(`No git commit recorded for Mercurial SHA ${hgSha}`);
+    }
+
+    shaCache.set(`hg2git:${hgSha}`, revision.git_commit);
+    shaCache.set(`git2hg:${revision.git_commit}`, revision.node);
+    shaCache.set(`hgrepo:${hgSha}`, name);
+    shaCache.set(`gitrepo:${revision.git_commit}`, name);
+    return { gitSha: revision.git_commit, repo: name };
   }
 
-  // Tagging changesets exist only in Mercurial. hgweb still reports a
-  // git_commit, but it is not present on GitHub, so fail with something more
-  // useful than the 404 the next request would produce.
-  if (revision.branch && revision.branch !== DEFAULT_BRANCH) {
+  if (taggingBranch) {
     throw new Error(
-      `${shorten(hgSha)} is on the "${revision.branch}" branch, not ` +
+      `${shorten(hgSha)} is on the "${taggingBranch}" branch, not ` +
         `${DEFAULT_BRANCH}. Automated tagging changesets have no counterpart ` +
         `on GitHub and cannot be assessed.`
     );
   }
 
-  shaCache.set(`hg2git:${hgSha}`, revision.git_commit);
-  shaCache.set(`git2hg:${revision.git_commit}`, revision.node);
-  return revision.git_commit;
+  throw new Error(
+    `Revision ${shorten(hgSha)} was not found in ` +
+      `${REPOS.map(r => r.name).join(" or ")}`
+  );
 }
 
 /**
@@ -128,16 +198,23 @@ export async function getGitSha(hgSha) {
  *
  * hgweb cannot be queried by git SHA, so we find the commit's date on GitHub
  * and scan the hg pushlog around that date for a changeset whose git_node
- * matches. mozilla-central is mirrored to Mercurial in batched pushes, so a
- * few days of pushlog is a small, bounded amount of data.
+ * matches. mozilla-central is mirrored to Mercurial in batched pushes and
+ * autoland lands one or two changesets at a time, so a few days of pushlog is
+ * a small, bounded amount of data in both cases.
+ *
+ * mozilla-central is searched first, then autoland, so a revision that has
+ * merged is always reported against the repository it merged into.
  *
  * @param {string} gitSha - The Git commit SHA
- * @returns {Promise<string>} The corresponding Mercurial SHA
+ * @returns {Promise<{hgSha: string, repo: string}>} The Mercurial SHA and repo
  */
 export async function getHgSha(gitSha) {
   const cached = shaCache.get(`git2hg:${gitSha}`);
   if (cached) {
-    return cached;
+    return {
+      hgSha: cached,
+      repo: shaCache.get(`gitrepo:${gitSha}`) ?? DEFAULT_REPO,
+    };
   }
 
   const commit = await fetchJSON(
@@ -156,27 +233,35 @@ export async function getHgSha(gitSha) {
     start.setUTCDate(start.getUTCDate() - 1);
     const end = new Date(commitDate);
     end.setUTCDate(end.getUTCDate() + daysAfter);
-
-    const pushes = await fetchHgJSON(
+    const window =
       `json-pushes?version=2&full=1` +
-        `&startdate=${toHgDate(start)}&enddate=${toHgDate(end)}`,
-      "fetch the Mercurial pushlog"
-    );
+      `&startdate=${toHgDate(start)}&enddate=${toHgDate(end)}`;
 
-    for (const push of Object.values(pushes.pushes ?? {})) {
-      for (const changeset of push.changesets) {
-        if (changeset.git_node === fullGitSha) {
-          shaCache.set(`git2hg:${fullGitSha}`, changeset.node);
-          shaCache.set(`hg2git:${changeset.node}`, fullGitSha);
-          return changeset.node;
+    for (const { name } of REPOS) {
+      const pushes = await fetchHgJSON(
+        window,
+        `fetch the ${name} pushlog`,
+        name
+      );
+
+      for (const push of Object.values(pushes.pushes ?? {})) {
+        for (const changeset of push.changesets) {
+          if (changeset.git_node === fullGitSha) {
+            shaCache.set(`git2hg:${fullGitSha}`, changeset.node);
+            shaCache.set(`hg2git:${changeset.node}`, fullGitSha);
+            shaCache.set(`gitrepo:${fullGitSha}`, name);
+            shaCache.set(`hgrepo:${changeset.node}`, name);
+            return { hgSha: changeset.node, repo: name };
+          }
         }
       }
     }
   }
 
   throw new Error(
-    `Could not find ${shorten(fullGitSha)} in the mozilla-central Mercurial ` +
-      `mirror. Very recent commits may not be mirrored yet.`
+    `Could not find ${shorten(fullGitSha)} in the ` +
+      `${REPOS.map(r => r.name).join(" or ")} Mercurial mirrors. Very recent ` +
+      `commits may not be mirrored yet.`
   );
 }
 
@@ -189,10 +274,11 @@ export function shorten(sha) {
 }
 
 /**
- * Resolves whatever the user typed into both SHA flavours.
+ * Resolves whatever the user typed into both SHA flavours, along with the
+ * repository it was found in.
  * @param {string} sha - A Git or Mercurial commit SHA, or empty for the latest
  * @param {string} shaType - Either "git" or "hg"
- * @returns {Promise<{gitSha: string, hgSha: string}>} Both SHAs
+ * @returns {Promise<{gitSha: string, hgSha: string, repo: string}>} The revision
  */
 export async function resolveRevision(sha, shaType) {
   const trimmed = sha.trim();
@@ -206,14 +292,14 @@ export async function resolveRevision(sha, shaType) {
   }
 
   if (shaType === "hg") {
-    const gitSha = await getGitSha(trimmed);
+    const { gitSha, repo } = await getGitSha(trimmed);
     // getGitSha resolves short SHAs via hgweb, so re-read the canonical node.
     const hgSha = shaCache.get(`git2hg:${gitSha}`) ?? trimmed;
-    return { gitSha, hgSha };
+    return { gitSha, hgSha, repo };
   }
 
-  const hgSha = await getHgSha(trimmed);
-  return { gitSha: shaCache.get(`hg2git:${hgSha}`) ?? trimmed, hgSha };
+  const { hgSha, repo } = await getHgSha(trimmed);
+  return { gitSha: shaCache.get(`hg2git:${hgSha}`) ?? trimmed, hgSha, repo };
 }
 
 /**
@@ -225,7 +311,7 @@ export async function resolveRevision(sha, shaType) {
  * and every subsequent lookup 404s. Runs of four or more such pushes in a row
  * are common, so walk back until a real default-branch push turns up.
  *
- * @returns {Promise<{gitSha: string, hgSha: string}>} Both SHAs
+ * @returns {Promise<{gitSha: string, hgSha: string, repo: string}>} The revision
  */
 export async function getLatestRevision() {
   // tipsonly keeps this to one changeset per push, so full detail is cheap.
@@ -245,10 +331,12 @@ export async function getLatestRevision() {
       const tip = pushes[id].changesets[pushes[id].changesets.length - 1];
       if (tip.branch === DEFAULT_BRANCH) {
         const hgSha = tip.node;
-        const gitSha = tip.git_node ?? (await getGitSha(hgSha));
+        const gitSha = tip.git_node ?? (await getGitSha(hgSha)).gitSha;
         shaCache.set(`hg2git:${hgSha}`, gitSha);
         shaCache.set(`git2hg:${gitSha}`, hgSha);
-        return { gitSha, hgSha };
+        shaCache.set(`hgrepo:${hgSha}`, DEFAULT_REPO);
+        shaCache.set(`gitrepo:${gitSha}`, DEFAULT_REPO);
+        return { gitSha, hgSha, repo: DEFAULT_REPO };
       }
     }
 
@@ -273,16 +361,20 @@ export async function getLatestRevision() {
 /**
  * Gets push data and trainhop jobs from Treeherder for a Mercurial SHA.
  * @param {string} hgSha - The Mercurial commit SHA
+ * @param {string} repoName - A repository name from REPOS
  * @returns {Promise<Object>} The push data, trainhop jobs and a summary
  */
-export async function getPushData(hgSha) {
+export async function getPushData(hgSha, repoName = DEFAULT_REPO) {
+  const project = getRepo(repoName).treeherder;
   const pushData = await fetchJSON(
-    `${TREEHERDER_API}/project/mozilla-central/push/?full=true&count=10&revision=${hgSha}`,
-    "fetch push data from Treeherder"
+    `${TREEHERDER_API}/project/${project}/push/?full=true&count=10&revision=${hgSha}`,
+    `fetch push data from Treeherder (${project})`
   );
 
   if (!pushData.results?.length) {
-    throw new Error(`No push data found for Mercurial SHA: ${hgSha}`);
+    throw new Error(
+      `No push data found for Mercurial SHA ${shorten(hgSha)} on ${project}`
+    );
   }
 
   const push = pushData.results[0];
@@ -305,7 +397,12 @@ export async function getPushData(hgSha) {
     ...betaJobsData.results,
   ]);
 
-  return { push, trainhopJobs, summary: summarizeJobs(trainhopJobs) };
+  return {
+    push,
+    trainhopJobs,
+    summary: summarizeJobs(trainhopJobs),
+    repo: repoName,
+  };
 }
 
 /**
@@ -442,11 +539,11 @@ export async function getMergeDates() {
 export async function getRevisionData(
   gitSha,
   hgSha,
-  { betaStartDate, releaseStartDate, onProgress }
+  { repo = DEFAULT_REPO, betaStartDate, releaseStartDate, onProgress }
 ) {
   const [pushData, newtabFtlInfo, rolloutData, localesReport] =
     await Promise.all([
-      getPushData(hgSha),
+      getPushData(hgSha, repo),
       getGitHubFileInfo(gitSha, EN_US_NEWTAB_FTL),
       getRolloutData(),
       buildLocalesReport({
@@ -460,6 +557,7 @@ export async function getRevisionData(
   return {
     gitSha,
     hgSha,
+    repo,
     pushData,
     newtabFtlLastModified: newtabFtlInfo.lastModifiedDate,
     localesReport,

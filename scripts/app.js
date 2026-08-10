@@ -8,6 +8,7 @@ import {
   getRevisionData,
   getMergeDates,
   buildLocalesReport,
+  hgRevisionUrl,
   shorten,
 } from "./api.js";
 import "./jobs-report.js";
@@ -108,12 +109,23 @@ class TrainCheckApp extends LitElement {
   }
 
   #renderResults() {
-    const { gitSha, hgSha, error, revisionData } = this.results;
+    const { gitSha, hgSha, repo, error, revisionData } = this.results;
 
     return html`
       <div class="results">
         <h2>Train Check Results</h2>
         <dl class="revision">
+          ${repo
+            ? html`<dt>Repository</dt>
+                <dd>
+                  ${repo}
+                  ${repo === "autoland"
+                    ? html`<span class="note"
+                        >- not yet merged to mozilla-central</span
+                      >`
+                    : ""}
+                </dd>`
+            : ""}
           ${gitSha
             ? html`<dt>Git SHA</dt>
                 <dd>
@@ -129,7 +141,7 @@ class TrainCheckApp extends LitElement {
             ? html`<dt>Mercurial SHA</dt>
                 <dd>
                   <a
-                    href="https://hg.mozilla.org/mozilla-central/rev/${hgSha}"
+                    href="${hgRevisionUrl(hgSha, repo)}"
                     target="_blank"
                     rel="noopener"
                     >${shorten(hgSha)}</a
@@ -265,9 +277,10 @@ class TrainCheckApp extends LitElement {
 
     let gitSha = null;
     let hgSha = null;
+    let repo = null;
 
     try {
-      ({ gitSha, hgSha } = await resolveRevision(this.sha, this.shaType));
+      ({ gitSha, hgSha, repo } = await resolveRevision(this.sha, this.shaType));
 
       // If no SHA was provided, populate the input with the one we resolved.
       if (!this.sha.trim()) {
@@ -297,15 +310,16 @@ class TrainCheckApp extends LitElement {
 
       this.#setProgress("Fetching CI, locales and rollout data...");
       const revisionData = await getRevisionData(gitSha, hgSha, {
+        repo,
         betaStartDate,
         releaseStartDate,
         onProgress: message => this.#setProgress(message),
       });
 
-      this.results = { gitSha, hgSha, revisionData };
+      this.results = { gitSha, hgSha, repo, revisionData };
       this.#updateLocationBar(gitSha, hgSha);
     } catch (error) {
-      this.results = { gitSha, hgSha, error: error.message };
+      this.results = { gitSha, hgSha, repo, error: error.message };
     } finally {
       this.loading = false;
     }

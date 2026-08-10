@@ -110,6 +110,11 @@ button:disabled {
   margin: 0;
 }
 
+.note {
+  color: var(--text-color-deemphasized);
+  font-weight: normal;
+}
+
 #sha-type-holder {
   border: 0;
   padding: 0;

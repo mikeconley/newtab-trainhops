@@ -64,3 +64,84 @@ td {
   font-style: italic;
   color: var(--text-color-deemphasized);
 }
+
+.schedule {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.schedule.prominent {
+  border-color: var(--status-unknown-color);
+  border-inline-start-width: 4px;
+}
+
+.schedule p {
+  margin: 0 0 6px;
+}
+
+.schedule p:last-child {
+  margin-bottom: 0;
+}
+
+.schedule code {
+  padding: 1px 5px;
+  background: var(--code-background-color);
+  border-radius: 3px;
+}
+
+.schedule-link {
+  font-weight: bold;
+}
+
+.schedule-steps {
+  margin: 0;
+  padding-inline-start: 20px;
+}
+
+.schedule-steps li {
+  margin-bottom: 6px;
+}
+
+.schedule-steps li:last-child {
+  margin-bottom: 0;
+}
+
+.query-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+code.query {
+  flex: 1;
+  padding: 6px 8px;
+  background: var(--code-background-color);
+  border-radius: 3px;
+  word-break: break-word;
+  font-size: 0.95em;
+}
+
+.schedule .note {
+  color: var(--text-color-deemphasized);
+}
+
+button.copy {
+  flex: none;
+  font: inherit;
+  font-size: 0.9em;
+  padding: 1px 8px;
+  margin-inline-start: 4px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+button.copy:hover {
+  background: var(--code-background-color);
+}
