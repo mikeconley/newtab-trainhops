@@ -68,8 +68,11 @@ button.refresh:disabled {
   border-bottom: 1px dotted var(--border-color);
 }
 
-.fully-translated h3 {
+h3 {
   font-size: 0.95em;
+}
+
+.fully-translated h3 {
   margin-bottom: 0;
 }
 

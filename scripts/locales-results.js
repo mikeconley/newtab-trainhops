@@ -198,9 +198,13 @@ class LocalesResults extends LitElement {
           : html`<p class="note">None.</p>`}
       </section>
 
-      ${locales.map(locale =>
-        this.#renderLocaleRow(locale, this.localesReport.locales[locale])
-      )}
+      <hr />
+      <section class="not-yet-fully-translated">
+        <h3>Not yet fully translated (${summary.withMissing} of ${summary.total})</h3>
+        ${locales.map(locale =>
+          this.#renderLocaleRow(locale, this.localesReport.locales[locale])
+        )}
+      </section>
     `;
   }
 }

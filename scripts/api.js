@@ -29,6 +29,13 @@ const EN_US_NEWTAB_FTL = "browser/locales/en-US/browser/newtab/newtab.ftl";
 
 const SHA_RE = /^[0-9a-f]{7,40}$/i;
 
+// Real mozilla-central work lands on "default"; ffxbld's tagging changesets go
+// to "tags-unified" and exist only in Mercurial.
+const DEFAULT_BRANCH = "default";
+
+// How far back to reach per request when skipping over runs of tagging pushes.
+const PUSH_PAGE_SIZE = 20;
+
 /**
  * The git <-> hg mapping for a landed changeset never changes, so it is safe
  * to cache forever. Replaces the browser.storage.local cache used by the
@@ -98,6 +105,17 @@ export async function getGitSha(hgSha) {
   const revision = await getHgRevision(hgSha);
   if (!revision.git_commit) {
     throw new Error(`No git commit recorded for Mercurial SHA ${hgSha}`);
+  }
+
+  // Tagging changesets exist only in Mercurial. hgweb still reports a
+  // git_commit, but it is not present on GitHub, so fail with something more
+  // useful than the 404 the next request would produce.
+  if (revision.branch && revision.branch !== DEFAULT_BRANCH) {
+    throw new Error(
+      `${shorten(hgSha)} is on the "${revision.branch}" branch, not ` +
+        `${DEFAULT_BRANCH}. Automated tagging changesets have no counterpart ` +
+        `on GitHub and cannot be assessed.`
+    );
   }
 
   shaCache.set(`hg2git:${hgSha}`, revision.git_commit);
@@ -199,27 +217,57 @@ export async function resolveRevision(sha, shaType) {
 }
 
 /**
- * Gets the most recent mozilla-central revision that has been mirrored to
- * Mercurial. This is the newest revision that can actually have Treeherder
- * results, which is what matters for a train-hop assessment.
+ * Gets the most recent mozilla-central revision worth assessing.
+ *
+ * Automated tagging pushes (ffxbld touching only .hgtags) land on the
+ * tags-unified branch rather than default. They exist only in Mercurial, so
+ * although hgweb reports a git_node for them, that SHA is absent from GitHub
+ * and every subsequent lookup 404s. Runs of four or more such pushes in a row
+ * are common, so walk back until a real default-branch push turns up.
+ *
  * @returns {Promise<{gitSha: string, hgSha: string}>} Both SHAs
  */
 export async function getLatestRevision() {
-  const pushes = await fetchHgJSON(
-    "json-pushes?version=2&tipsonly=1",
-    "fetch the latest push"
-  );
+  // tipsonly keeps this to one changeset per push, so full detail is cheap.
+  let query = "json-pushes?version=2&full=1&tipsonly=1";
 
-  const ids = Object.keys(pushes.pushes ?? {});
-  if (!ids.length) {
-    throw new Error("No pushes found on mozilla-central");
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const pushes = (await fetchHgJSON(query, "fetch the latest pushes")).pushes;
+    const ids = Object.keys(pushes ?? {})
+      .map(Number)
+      .sort((a, b) => b - a);
+
+    if (!ids.length) {
+      break;
+    }
+
+    for (const id of ids) {
+      const tip = pushes[id].changesets[pushes[id].changesets.length - 1];
+      if (tip.branch === DEFAULT_BRANCH) {
+        const hgSha = tip.node;
+        const gitSha = tip.git_node ?? (await getGitSha(hgSha));
+        shaCache.set(`hg2git:${hgSha}`, gitSha);
+        shaCache.set(`git2hg:${gitSha}`, hgSha);
+        return { gitSha, hgSha };
+      }
+    }
+
+    // Every push in this batch was a tagging push, so page further back. endID
+    // is ignored unless startID is given too, and the range it returns is
+    // exclusive of startID and inclusive of endID.
+    const end = Math.min(...ids) - 1;
+    if (end < 1) {
+      break;
+    }
+    const start = Math.max(0, end - PUSH_PAGE_SIZE);
+    query =
+      `json-pushes?version=2&full=1&tipsonly=1` +
+      `&startID=${start}&endID=${end}`;
   }
 
-  const latest = pushes.pushes[Math.max(...ids.map(Number))];
-  const hgSha = latest.changesets[latest.changesets.length - 1];
-  const gitSha = await getGitSha(hgSha);
-
-  return { gitSha, hgSha };
+  throw new Error(
+    "Could not find a recent mozilla-central push on the default branch"
+  );
 }
 
 /**
