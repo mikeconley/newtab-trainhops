@@ -502,15 +502,14 @@ export async function getMergeDates() {
       betaStartDate = Temporal.PlainDate.from(betaData.merge_day).toString();
     }
 
-    // The release query needs to be different because the endpoint doesn't
-    // actually tell us the merge-to-beta date for the version on the release
-    // channel. We guesstimate it by getting at the build date for the first
-    // beta of that version, and finding the last prior Monday.
+    // mach_commands.py guesstimates this one by taking the first beta build of
+    // the release version and walking back to the previous Monday, because the
+    // endpoint used not to report a merge date for the release channel. It does
+    // now, and the guess is usually wrong: merge day has been a Tuesday for
+    // most recent cycles and a Thursday for 155, so read it directly instead.
     if (releaseResponse.ok) {
       const releaseData = await releaseResponse.json();
-      let releaseStartDateObj = Temporal.PlainDate.from(releaseData.beta_1);
-      const delta = (releaseStartDateObj.dayOfWeek + 6) % 7; // 0 if Monday, ..., 6 if Sunday
-      releaseStartDate = releaseStartDateObj.subtract({ days: delta }).toString();
+      releaseStartDate = Temporal.PlainDate.from(releaseData.merge_day).toString();
     }
 
     return { betaStartDate, releaseStartDate };

@@ -6,6 +6,9 @@ import { LitElement, html } from "../vendor/lit3/lit-all.min.js";
 
 const PENDING_WARNING_THRESHOLD = 10;
 
+// Where both merge dates come from, so the <dt> labels link back to the source.
+const TRAIN_SCHEDULE_URL = "https://whattrainisitnow.com/release/?version=";
+
 class LocalesResults extends LitElement {
   static properties = {
     localesReport: { type: Object },
@@ -73,14 +76,22 @@ class LocalesResults extends LitElement {
             result can change as new translations land</span
           >
         </dd>
-        <dt>Beta merge</dt>
+        <dt>
+          <a href="${TRAIN_SCHEDULE_URL}beta" target="_blank" rel="noopener"
+            >Beta merge</a
+          >
+        </dt>
         <dd>
           ${meta.betaStartDate}
           ${meta.betaThresholdPassed
             ? html`<span class="note">- over 3 weeks ago, fallback applies</span>`
             : html`<span class="note">- under 3 weeks ago</span>`}
         </dd>
-        <dt>Release merge-to-beta</dt>
+        <dt>
+          <a href="${TRAIN_SCHEDULE_URL}release" target="_blank" rel="noopener"
+            >Release merge-to-beta</a
+          >
+        </dt>
         <dd>${meta.releaseStartDate}</dd>
       </dl>
     `;
