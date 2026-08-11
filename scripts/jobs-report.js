@@ -26,7 +26,7 @@ const EXPECTED_PLATFORM_COUNT = 3;
 // scoring entirely.
 const FUZZY_QUERY =
   "'trainhop opt-mochitest-browser-chrome !asan !ccov !-cf !artifact " +
-  "!wayland !debug !windows11-32 !aarch64 !tsan !shippable";
+  "!wayland !debug !windows11-32 !tsan !shippable";
 
 class JobsReport extends LitElement {
   static properties = {
