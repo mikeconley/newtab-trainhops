@@ -99,14 +99,42 @@ function rawL10n(revision, path) {
 }
 
 /**
- * Parses a Fluent file into a map of message id to serialized entry.
+ * Builds the text used to decide whether a message has changed since a
+ * snapshot, and so how old it is.
+ *
+ * The in-tree tool derives message ages from `git blame`, and its regex
+ * (`^([a-z-]+[^\s]+) `) only matches the line the message id sits on. Rewording
+ * a value therefore resets a string's age, but editing its attributes (indented
+ * lines) or the developer comment above it does not. Serializing the whole
+ * entry would wrongly reset the age whenever a comment was touched, so compare
+ * the id and its value alone.
+ *
+ * @param {Object} entry - A Fluent Message or Term AST node
+ * @param {string} id - The entry's id, with the "-" prefix for terms
+ * @returns {string} Text that changes only when the id's own line does
+ */
+function comparableText(entry, id) {
+  if (!entry.value) {
+    // Attribute-only messages have just "id =" on the id's line.
+    return `${id} =`;
+  }
+
+  const bare =
+    entry instanceof Term
+      ? new Term(entry.id, entry.value)
+      : new Message(entry.id, entry.value);
+  return serializer.serializeEntry(bare);
+}
+
+/**
+ * Parses a Fluent file into a map of message id to comparable text.
  *
  * Mirrors moz.l10n's parse_resource + msg_ids: one entry per Message or Term
  * (terms prefixed with "-"), attributes are *not* separate entries, and any
  * Junk makes the whole file an error.
  *
  * @param {string} source - The Fluent file contents
- * @returns {Map<string, string>} Message id to its serialized text
+ * @returns {Map<string, string>} Message id to its comparable text
  * @throws {Error} If the file contains Fluent syntax errors
  */
 function parseEntries(source) {
@@ -120,7 +148,7 @@ function parseEntries(source) {
     }
     if (entry instanceof Message || entry instanceof Term) {
       const id = (entry instanceof Term ? "-" : "") + entry.id.name;
-      entries.set(id, serializer.serializeEntry(entry));
+      entries.set(id, comparableText(entry, id));
     }
   }
 
@@ -184,7 +212,9 @@ export async function getShippedLocales(gitSha) {
  * @returns {Promise<Map<string, string>|null>} Entries, or null if unavailable
  */
 async function getEntriesAsOf(path, isoDate) {
-  const cacheKey = `snapshot:${path}@${isoDate}`;
+  // The version suffix retires snapshots cached under an older definition of
+  // an entry's comparable text.
+  const cacheKey = `snapshot2:${path}@${isoDate}`;
   const cached = readCache(cacheKey);
   if (cached) {
     return new Map(cached);
