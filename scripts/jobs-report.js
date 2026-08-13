@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { LitElement, html } from "../vendor/lit3/lit-all.min.js";
+import sheet from "../styles/jobs-report.css" with { type: "css" };
 import {
   BETA_JOB_GROUP_SYMBOL,
   RELEASE_JOB_GROUP_SYMBOL,
@@ -29,6 +30,8 @@ const FUZZY_QUERY =
   "!wayland !debug !windows11-32 !tsan !shippable";
 
 class JobsReport extends LitElement {
+  static styles = sheet;
+
   static properties = {
     pushData: { type: Object },
     copiedQuery: { type: Boolean },
@@ -163,7 +166,6 @@ class JobsReport extends LitElement {
     const platforms = Object.keys(this.pushData.summary);
 
     return html`
-      <link rel="stylesheet" href="./styles/jobs-report.css" />
       <h1>Train-hop Compatibility Jobs report</h1>
       ${platforms.length
         ? html`

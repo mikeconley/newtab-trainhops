@@ -3,8 +3,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { LitElement, html } from "../vendor/lit3/lit-all.min.js";
+import sheet from "../styles/rollouts-report.css" with { type: "css" };
 
 class RolloutsReport extends LitElement {
+  static styles = sheet;
+
   static properties = {
     rollouts: { type: Object },
   };
@@ -42,7 +45,6 @@ class RolloutsReport extends LitElement {
 
   render() {
     return html`
-      <link rel="stylesheet" href="./styles/rollouts-report.css" />
       <h1>Active rollouts</h1>
       <h2>Release</h2>
       <div>${this.#rolloutsFor("release")}</div>

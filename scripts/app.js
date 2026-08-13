@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { LitElement, html } from "../vendor/lit3/lit-all.min.js";
+import sheet from "../styles/train-check-app.css" with { type: "css" };
 import {
   resolveRevision,
   getRevisionData,
@@ -19,6 +20,8 @@ const SHA_TYPE_HG = "hg";
 const SHA_TYPE_GIT = "git";
 
 class TrainCheckApp extends LitElement {
+  static styles = sheet;
+
   static properties = {
     sha: { type: String },
     loading: { type: Boolean },
@@ -53,7 +56,6 @@ class TrainCheckApp extends LitElement {
 
   render() {
     return html`
-      <link rel="stylesheet" href="./styles/train-check-app.css" />
       <h1>New Tab Train-hops</h1>
 
       <div class="input-section">

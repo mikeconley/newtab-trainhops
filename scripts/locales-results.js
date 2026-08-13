@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { LitElement, html } from "../vendor/lit3/lit-all.min.js";
+import sheet from "../styles/locales-results.css" with { type: "css" };
 
 const PENDING_WARNING_THRESHOLD = 10;
 
@@ -10,6 +11,8 @@ const PENDING_WARNING_THRESHOLD = 10;
 const TRAIN_SCHEDULE_URL = "https://whattrainisitnow.com/release/?version=";
 
 class LocalesResults extends LitElement {
+  static styles = sheet;
+
   static properties = {
     localesReport: { type: Object },
     newtabFtlLastModified: { type: String },
@@ -174,7 +177,6 @@ class LocalesResults extends LitElement {
     );
 
     return html`
-      <link rel="stylesheet" href="./styles/locales-results.css" />
       <div class="report-header">
         <h1>Locales report</h1>
         <button
