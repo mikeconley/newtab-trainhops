@@ -20,7 +20,12 @@ const HGMO_HEADERS = { Accept: "application/json" };
 const TREEHERDER_API = "https://treeherder.mozilla.org/api";
 const TRAIN_SCHEDULE_API = "https://whattrainisitnow.com/api/release/schedule";
 const EXPERIMENTER_API =
-  "https://experimenter.services.mozilla.com/api/v8/experiments/?status=Live&application=firefox-desktop&feature_config=newtabTrainhopAddon";
+  "https://experimenter.services.mozilla.com/api/v8/experiments/?status=Live&application=firefox-desktop&feature_config=";
+
+// newtabTrainhopAddonDeployment is meant to supplant newtabTrainhopAddon, so
+// rollouts using the older feature are flagged as legacy in the report.
+const LEGACY_ROLLOUT_FEATURE = "newtabTrainhopAddon";
+const ROLLOUT_FEATURE = "newtabTrainhopAddonDeployment";
 
 export const RELEASE_JOB_GROUP_SYMBOL = "M-trainhop-rel";
 export const BETA_JOB_GROUP_SYMBOL = "M-trainhop-beta";
@@ -588,12 +593,16 @@ async function getGitHubFileInfo(gitSha, filePath) {
 }
 
 /**
- * Fetches the live Nimbus rollouts using the newtab train-hop add-on feature.
+ * Fetches the live Nimbus rollouts using a single train-hop add-on feature.
+ * @param {string} featureConfig The Nimbus feature config slug to query for
+ * @param {boolean} legacy Whether this feature is the superseded one
  * @returns {Promise<Array<Object>>} The matching rollouts, or [] on failure
  */
-async function getRolloutData() {
+async function getRolloutDataForFeature(featureConfig, legacy) {
   try {
-    let response = await fetch(EXPERIMENTER_API, { credentials: "omit" });
+    let response = await fetch(`${EXPERIMENTER_API}${featureConfig}`, {
+      credentials: "omit",
+    });
     if (!response.ok) {
       return [];
     }
@@ -605,9 +614,30 @@ async function getRolloutData() {
         userFacingName,
         bucketConfig,
         channels,
+        legacy,
       })
     );
   } catch (e) {
     return [];
   }
+}
+
+/**
+ * Fetches the live Nimbus rollouts using either of the newtab train-hop
+ * add-on features, merged into a single list.
+ * @returns {Promise<Array<Object>>} The matching rollouts, or [] on failure
+ */
+async function getRolloutData() {
+  let [rollouts, legacyRollouts] = await Promise.all([
+    getRolloutDataForFeature(ROLLOUT_FEATURE, false),
+    getRolloutDataForFeature(LEGACY_ROLLOUT_FEATURE, true),
+  ]);
+
+  // A rollout can list both features while the migration is underway, in which
+  // case it is not legacy.
+  let slugs = new Set(rollouts.map(rollout => rollout.slug));
+  return [
+    ...rollouts,
+    ...legacyRollouts.filter(rollout => !slugs.has(rollout.slug)),
+  ];
 }

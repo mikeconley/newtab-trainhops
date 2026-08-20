@@ -35,7 +35,13 @@ class RolloutsReport extends LitElement {
           return html`<li>
             <a href="${NIMBUS_URL}" target="_blank" rel="noopener" title="${rollout.slug} - ${rollout.userFacingName}"
               >${rollout.userFacingName}</a
-            >
+            >${rollout.legacy
+              ? html`<sup
+                  class="legacy"
+                  title="Uses the legacy newtabTrainhopAddon feature"
+                  >legacy</sup
+                >`
+              : ""}
             at <strong>${PERCENTAGE}%</strong>
           </li>`;
         })}
@@ -46,6 +52,13 @@ class RolloutsReport extends LitElement {
   render() {
     return html`
       <h1>Active rollouts</h1>
+      <p class="legacy-note">
+        A <sup class="legacy">legacy</sup> tag means that the rollout uses the
+        legacy, non-co-enrolling <code>newtabTrainhopAddon</code> feature. This
+        is being replaced with the co-enrolling
+        <code>newtabTrainhopAddonDeployment</code> feature once Firefox 155 hits
+        release.
+      </p>
       <h2>Release</h2>
       <div>${this.#rolloutsFor("release")}</div>
       <h2>Beta</h2>

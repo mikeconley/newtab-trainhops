@@ -30,3 +30,26 @@ a:hover {
 ol {
   padding-inline-start: 20px;
 }
+
+/* Temporary: remove once newtabTrainhopAddon is fully replaced. */
+.legacy-note {
+  margin-block: 0.5em;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
+.legacy-note code {
+  font-size: 0.95em;
+}
+
+sup.legacy {
+  margin-inline-start: 2px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  font-size: 0.65em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: help;
+}
