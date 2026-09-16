@@ -42,6 +42,67 @@ ol {
   font-size: 0.95em;
 }
 
+.saturation {
+  margin-inline-start: 6px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background-color: color-mix(in srgb, currentColor 10%, transparent);
+  font-size: 0.8em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.saturation:hover {
+  background-color: color-mix(in srgb, currentColor 18%, transparent);
+  text-decoration: underline;
+}
+
+.saturation-pending {
+  display: inline-block;
+  margin-inline-start: 6px;
+  width: 0.8em;
+  height: 0.8em;
+  vertical-align: -0.1em;
+  border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-block-start-color: currentColor;
+  border-radius: 50%;
+  /* Fading in on a delay keeps a cached reading, which arrives in a single
+     fetch, from flashing a spinner. */
+  animation:
+    saturation-spin 0.7s linear infinite,
+    saturation-appear 0.15s 0.3s both;
+}
+
+@keyframes saturation-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes saturation-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .saturation-pending {
+    animation: saturation-appear 0.15s 0.3s both;
+    border-block-start-color: inherit;
+    opacity: 0.6;
+  }
+}
+
+.saturation-note {
+  margin-block: 1em 0;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
 sup.legacy {
   margin-inline-start: 2px;
   padding: 1px 4px;

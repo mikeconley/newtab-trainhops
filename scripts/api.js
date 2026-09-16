@@ -609,17 +609,39 @@ async function getRolloutDataForFeature(featureConfig, legacy) {
 
     let responseJSON = await response.json();
     return responseJSON.map(
-      ({ slug, userFacingName, bucketConfig, channels }) => ({
+      ({ slug, userFacingName, bucketConfig, channels, branches }) => ({
         slug,
         userFacingName,
         bucketConfig,
         channels,
         legacy,
+        addonVersion: addonVersionFor(branches, featureConfig),
       })
     );
   } catch (e) {
     return [];
   }
+}
+
+/**
+ * Reads the add-on version a rollout deploys out of its branch's feature value.
+ * A rollout has a single branch, but it can carry both train-hop features
+ * while the migration to the co-enrolling one is underway.
+ *
+ * @param {Array<Object>} branches - The rollout's Nimbus branches
+ * @param {string} featureConfig - The feature config slug being read
+ * @returns {string|null} The add-on version, or null if absent
+ */
+function addonVersionFor(branches, featureConfig) {
+  for (const branch of branches ?? []) {
+    for (const feature of branch.features ?? []) {
+      if (feature.featureId === featureConfig && feature.value?.addon_version) {
+        return feature.value.addon_version;
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
